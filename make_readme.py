@@ -58,13 +58,12 @@ def make_readme(URL_PAGE, option):
         Parse with beautiful soup to obtain
         student page (my special case)
         ------------------------------------------
-        """
         soup_login = BeautifulSoup(login.text, "html.parser")
         student_staff = soup_login.find(
             "div", id="viewing_as_permission_group")
         link_student = student_staff.find_all(
             "div")[1].a["href"]  # link to user session
-
+        """
         try:
             """
             -------------------------------------------------
