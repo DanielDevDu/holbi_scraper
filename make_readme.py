@@ -47,8 +47,29 @@ def make_readme(URL_PAGE, option):
                 "commit": "submit"}
             login = session.post(URL, data=params)
             if login.status_code != 200:
-                print("Some failed Login")
+                print("Login failed")
                 return False
+            elif login.status_code == 200:
+                print("Login successful")
+        except Exception as err:
+            print(err)
+            return False
+
+        """
+        -----------------------------------------
+        Special case for especializations
+        We must choose the specialization in the 
+        main page
+        -----------------------------------------
+        """
+        try:
+            login_page = BeautifulSoup(login.text, "html.parser")
+
+            curriculum = login_page.find("div", id="student-switch-curriculum")
+            programs = curriculum.find_all("a")
+            # names = curriculum.find_all("span", class_="fs-4 fw-500")
+            # programs_urls = [{"name": "{}".format(name.get_text()), "url": 'https://intranet.hbtn.io/{}'.format(program["href"])} for program, name in zip(programs, names)]
+            programs_urls = ['https://intranet.hbtn.io/{}'.format(program["href"]) for program in programs]
         except Exception as err:
             print(err)
             return False
@@ -71,8 +92,21 @@ def make_readme(URL_PAGE, option):
             Here, thank to session, we dont need login again
             -------------------------------------------------
             """
-            project_page = session.get(URL_PAGE, allow_redirects=False)
+            # Check if the problems is for the programs
+            # for name, url in programs_urls[0].items():
+            for url in programs_urls:
+                # print(name, url)
+                response = session.get(url)
+                if response.status_code != 200:
+                    print("Some failed with curriculum pages")
+                    return False
+                project_page = session.get(URL_PAGE, allow_redirects=False)
+                if project_page.status_code == 200:
+                    print("Project page successful")
+                    break
+
             if project_page.status_code != 200:
+
                 print("""Some failed with Project page\
                          \nAre you sure that this is the URL: {} ?
                        """.format(URL_PAGE)
@@ -93,6 +127,7 @@ def make_readme(URL_PAGE, option):
 
         project_name = project_page.find("h1", class_="gap")
         project_name = project_name.get_text()
+        print("Project name: {}".format(project_name))
 
         project_description = project_page.find(
             "div", id="project-description")
