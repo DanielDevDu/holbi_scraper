@@ -4,6 +4,10 @@ import requests
 from bs4 import BeautifulSoup
 from sys import argv
 from os import getenv
+import logging
+
+# logging.basicConfig(filename='./make_readme.log',
+#                     format='%(asctime)s %(message)s', level=logging.WARNING)
 
 
 def make_readme(URL_PAGE, option):
@@ -13,12 +17,16 @@ def make_readme(URL_PAGE, option):
 
         """
         ------------------------------------------
-        GET request to the main pega of Holberton
+        GET request to the main page of Holberton
+                        Login page
         ------------------------------------------
         """
-        response = session.get(URL)
-        if response.status_code != 200:
-            print("Some failed with GET")
+        try:
+            response = session.get(URL)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as err:
+            print("Error: GET request to the sing_in page:\n", err)
+            logging.warning(err)
             return False
 
         """
@@ -46,19 +54,20 @@ def make_readme(URL_PAGE, option):
                 "authenticity_token": token,
                 "commit": "submit"}
             login = session.post(URL, data=params)
-            if login.status_code != 200:
-                print("Login failed")
-                return False
-            elif login.status_code == 200:
+            login.raise_for_status()
+
+            if login.status_code == 200:
                 print("Login successful")
-        except Exception as err:
-            print(err)
+
+        except requests.exceptions.RequestException as err:
+            print("Error: POST request to login:\n", err)
+            logging.warning(err)
             return False
 
         """
         -----------------------------------------
         Special case for especializations
-        We must choose the specialization in the 
+        We must choose the specialization in the
         main page
         -----------------------------------------
         """
@@ -67,11 +76,17 @@ def make_readme(URL_PAGE, option):
 
             curriculum = login_page.find("div", id="student-switch-curriculum")
             programs = curriculum.find_all("a")
-            # names = curriculum.find_all("span", class_="fs-4 fw-500")
-            # programs_urls = [{"name": "{}".format(name.get_text()), "url": 'https://intranet.hbtn.io/{}'.format(program["href"])} for program, name in zip(programs, names)]
-            programs_urls = ['https://intranet.hbtn.io/{}'.format(program["href"]) for program in programs]
+            curriculum_names = curriculum.find_all(
+                "span", class_="fs-4 fw-500")
+            programs_urls = [{"name": "{}".format(name.get_text()), "url": 'https://intranet.hbtn.io/{}'.format(
+                program["href"])} for program, name in zip(programs, curriculum_names)]
+
+            # all programs of the current user. For example: Fundations and Machine Learning.
+            # programs_urls = [
+            #     'https://intranet.hbtn.io/{}'.format(program["href"]) for program in programs]
         except Exception as err:
-            print(err)
+            print("Error: parsing login page to obtain programs:\n", err)
+            logging.warning(err)
             return False
 
         """
@@ -96,33 +111,46 @@ def make_readme(URL_PAGE, option):
             # for name, url in programs_urls[0].items():
             for url in programs_urls:
                 # print(name, url)
-                response = session.get(url)
-                if response.status_code != 200:
-                    print("Some failed with curriculum pages")
+                try:
+                    response = session.get(url["url"])
+                    curriculum_name = url["name"]  # name of the curriculum
+                    response.raise_for_status()
+                except requests.exceptions.RequestException as err:
+                    print("Error: GET request to the curriculum page:\n", err)
+                    logging.warning(err)
                     return False
+
                 project_page = session.get(URL_PAGE, allow_redirects=False)
+                project_page.raise_for_status()
+
                 if project_page.status_code == 200:
                     print("Project page successful")
                     break
+        except requests.exceptions.RequestException as err:
+            print("Error: GET request to the project page:\n", err)
+            logging.warning(err)
+            return False
 
-            if project_page.status_code != 200:
-
-                print("""Some failed with Project page\
-                         \nAre you sure that this is the URL: {} ?
-                       """.format(URL_PAGE)
-                      )
-                return False
-        except Exception as err:
-            print(err)
+        """
+        ------------------------------------------
+        Check if the project page is exist
+        ------------------------------------------
+        """
+        if project_page.status_code == 302:
+            print("This project does not exist or you do not have access to it")
             return False
 
         """
         ------------------------------------------
         Parse with beautiful soup to obtain:
+            - Name of curriculum
             - Project name
             - Project Description
         ------------------------------------------
         """
+        print("Curriculum: {}".format(curriculum_name.strip())
+              )  # name of the curriculum
+
         project_page = BeautifulSoup(project_page.text, "html.parser")
 
         project_name = project_page.find("h1", class_="gap")
@@ -131,6 +159,19 @@ def make_readme(URL_PAGE, option):
 
         project_description = project_page.find(
             "div", id="project-description")
+
+        """
+        ------------------------------------------
+        Obtain FilesNames required for the project
+        ------------------------------------------
+        """
+        list_group = project_page.find_all("div", class_="list-group-item")
+        list_files = [group.find_all("li")[2].find("code").get_text().strip().split(",")
+                      for group in list_group]
+        list_files = [file.strip()
+                      for sublist in list_files for file in sublist]
+        print(list_files)
+        print(len(list_files))
 
         """
         -----------------------------
@@ -170,8 +211,14 @@ def make_readme(URL_PAGE, option):
             mode = "+w"
 
         with open("README.md", mode=mode, encoding="utf-8") as file:
-            file.write("# {}\n\n".format(project_name))
-            file.write("<html>\n{}\n[--LINK PROJECT--]({})\n</html>".format(string_description, URL_PAGE))
+            file.write("# [{}]({})\n\n".format(
+                project_name.split(".")[1].strip(), URL_PAGE))
+            file.write(
+                "<html>\n{}\n[--LINK PROJECT--]({})\n</html>".format(string_description, URL_PAGE))
+
+        with open("files.txt", mode="+w", encoding="utf-8") as file:
+            write_files = ["{}\n".format(file) for file in list_files]
+            file.writelines(write_files)
 
         return True
 
@@ -180,12 +227,12 @@ if __name__ == "__main__":
     if len(argv) != 3:
         print(
             """
-            USAGE: {} URL 0/1
+            USAGE: make_readme NUMBER_OF_PROJECT 0/1
                 0: New file or Rewrite README
                 1: Append to the end of README
-            """.format(argv[0]))
+            """)
     else:
-        URL_PAGE = argv[1]
+        URL_PAGE = "https://intranet.hbtn.io/projects/" + argv[1]
         option = argv[2]
 
         status = make_readme(URL_PAGE, option)
@@ -193,4 +240,4 @@ if __name__ == "__main__":
         if status:
             print("-----README Created succesfully-----")
         else:
-            print("-----REAME Cannot be created-----")
+            print("-----README Could not be created-----")
