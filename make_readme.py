@@ -170,8 +170,6 @@ def make_readme(URL_PAGE, option):
                       for group in list_group]
         list_files = [file.strip()
                       for sublist in list_files for file in sublist]
-        print(list_files)
-        print(len(list_files))
 
         """
         -----------------------------
@@ -216,6 +214,12 @@ def make_readme(URL_PAGE, option):
             file.write(
                 "<html>\n{}\n[--LINK PROJECT--]({})\n</html>".format(string_description, URL_PAGE))
 
+        """
+        ------------------------------------------
+        Write on files.txt the name of the files
+        needs to do the project
+        ------------------------------------------
+        """
         with open("files.txt", mode="+w", encoding="utf-8") as file:
             write_files = ["{}\n".format(file) for file in list_files]
             file.writelines(write_files)
